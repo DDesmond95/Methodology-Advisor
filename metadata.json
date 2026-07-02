@@ -1,0 +1,6 @@
+{
+  "name": "Project Methodology Advisor",
+  "description": "An adaptive advisor that evaluates project, financial, governance, culture, and delivery factors to recommend the optimal development methodology.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
