@@ -13,6 +13,7 @@ import { LensBreakdown } from "./components/LensBreakdown";
 import { WeightTuner } from "./components/WeightTuner";
 import { ScenarioComparer } from "./components/ScenarioComparer";
 import { ResultsDisplay } from "./components/ResultsDisplay";
+import { MethodologyMap } from "./components/MethodologyMap";
 import {
   Sparkles,
   Play,
@@ -26,7 +27,8 @@ import {
   Bookmark,
   Award,
   HelpCircle,
-  FileCheck
+  FileCheck,
+  Network
 } from "lucide-react";
 
 const CONFIDENCE_THRESHOLD = 0.25;
@@ -71,7 +73,7 @@ export default function App() {
   const [savedScenarios, setSavedScenarios] = useState<Scenario[]>([]);
 
   // Active tab on results screen
-  const [resultsTab, setResultsTab] = useState<"report" | "breakdown" | "tuner" | "history">("report");
+  const [resultsTab, setResultsTab] = useState<"report" | "breakdown" | "map" | "tuner" | "history">("report");
 
   // Show live scores inline in the quiz
   const [showLiveQuizScores, setShowLiveQuizScores] = useState(false);
@@ -710,6 +712,7 @@ export default function App() {
               <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none print:hidden">
                 {[
                   { id: "report", label: "Advisor Report", icon: FileCheck },
+                  { id: "map", label: "Interactive Maps", icon: Network },
                   { id: "breakdown", label: "Department Votes", icon: Scale },
                   { id: "tuner", label: "Interactive Tuner", icon: Sliders },
                   { id: "history", label: "Scenarios & Comparisons", icon: Bookmark }
@@ -748,6 +751,17 @@ export default function App() {
                     whatWouldChangeText={whatWouldChangeText}
                     onRestart={handleRestart}
                   />
+                )}
+
+                {/* INTERACTIVE MIND MAP / FLOWCHART VIEW */}
+                {resultsTab === "map" && (
+                  <div className="animate-fade-in">
+                    <MethodologyMap
+                      recommendedId={recommendedId}
+                      askedQuestions={askedQuestions}
+                      answers={answers}
+                    />
+                  </div>
                 )}
 
                 {/* 2. DEPARTMENT VOTES VIEW */}
