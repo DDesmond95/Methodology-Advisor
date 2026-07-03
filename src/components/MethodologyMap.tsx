@@ -242,7 +242,7 @@ export const MethodologyMap: React.FC<MethodologyMapProps> = ({
 
             {/* Absolute background connecting lines (pure CSS representation) */}
             <div className="hidden md:block absolute inset-0 pointer-events-none opacity-30">
-              <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-full h-full" viewBox="0 0 800 400" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
                 {/* Line from Root to Column 2 Sub-Branches */}
                 <path d="M 230 180 Q 250 120 330 120" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeDasharray="5,5" />
                 <path d="M 230 180 Q 250 200 330 205" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeDasharray="5,5" />

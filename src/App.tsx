@@ -103,6 +103,7 @@ export default function App() {
       xp: 0
     };
 
+    // 1. Base Score calculation
     askedQuestions.forEach((q) => {
       const option = answers[q.id];
       if (option) {
@@ -115,6 +116,61 @@ export default function App() {
         });
       }
     });
+
+    // 2. Culture Multiplier based on Cameron & Quinn's Competing Values Framework
+    const cultureAns = answers["culture"]?.text;
+    if (cultureAns) {
+      const multipliers: Record<string, Partial<Record<MethodologyId, number>>> = {
+        Clan: { scrum: 1.3, xp: 1.3, scrumban: 1.3, kanban: 1.0, lean: 1.0, hybrid: 1.0, waterfall: 0.7, safe: 0.7 },
+        Adhocracy: { lean: 1.3, xp: 1.3, kanban: 1.3, scrum: 1.0, scrumban: 1.0, waterfall: 0.7, safe: 0.7, hybrid: 0.7 },
+        Market: { scrum: 1.3, safe: 1.3, hybrid: 1.3, xp: 1.0, lean: 1.0, scrumban: 1.0, waterfall: 0.7, kanban: 0.7 },
+        Hierarchy: { waterfall: 1.3, hybrid: 1.3, safe: 1.3, lean: 1.0, scrum: 0.7, xp: 0.7, kanban: 0.7, scrumban: 0.7 }
+      };
+
+      let activeKey: string | null = null;
+      if (cultureAns.includes("Clan")) activeKey = "Clan";
+      else if (cultureAns.includes("Adhocracy")) activeKey = "Adhocracy";
+      else if (cultureAns.includes("Market")) activeKey = "Market";
+      else if (cultureAns.includes("Hierarchy")) activeKey = "Hierarchy";
+
+      if (activeKey && multipliers[activeKey]) {
+        const mults = multipliers[activeKey]!;
+        (Object.keys(s) as MethodologyId[]).forEach((m) => {
+          const factor = mults[m] ?? 1.0;
+          s[m] = s[m] * factor;
+        });
+      }
+    }
+
+    // 3. Regulated Industry / Safety-Critical Override
+    const isRegulated = 
+      (answers["compliance"]?.text.includes("Heavy")) || 
+      (answers["safety_critical"]?.text.includes("Yes"));
+
+    if (isRegulated) {
+      // Find current max score first
+      let maxScore = 0;
+      (Object.values(s) as number[]).forEach((val) => {
+        if (val > maxScore) maxScore = val;
+      });
+
+      if (maxScore > 0) {
+        // Waterfall and Hybrid each get +30% of current max score added
+        s.waterfall += maxScore * 0.3;
+        s.hybrid += maxScore * 0.3;
+
+        // Recalculate max score after boosting WF and HY to get the new peak
+        const newMax = Math.max(...(Object.values(s) as number[]));
+
+        // Capping pure agile/lean methods at 60% of newMax
+        const teamMethods: MethodologyId[] = ["scrum", "kanban", "xp", "lean"];
+        teamMethods.forEach((m) => {
+          if (s[m] > newMax * 0.6) {
+            s[m] = newMax * 0.6;
+          }
+        });
+      }
+    }
 
     return s;
   }, [askedQuestions, answers, weights]);
@@ -196,6 +252,12 @@ export default function App() {
 
       if (touchesContested) {
         relevance += 2.0;
+      }
+
+      // Exploration bonus: if the perspective of this question hasn't been asked yet, give a bonus to explore new dimensions!
+      const perspectiveAsked = askedQuestions.some((aq) => aq.perspective === q.perspective);
+      if (!perspectiveAsked) {
+        relevance += 1.5; // Encourages exploring unsampled dimensions/perspectives instead of just looping on the same ones
       }
 
       if (relevance > highestRelevance) {
@@ -283,17 +345,22 @@ export default function App() {
     const lead = (sorted[0]?.[0] || "scrum") as MethodologyId;
     const runUp = (sorted[1]?.[0] || "waterfall") as MethodologyId;
     const gap = sorted[0] ? (sorted[0][1] - (sorted[1]?.[1] || 0)) / (sorted[0][1] || 1) : 0;
-    const hasHighSig = availableQuestions.some((q) => q.signal >= HIGH_SIGNAL);
+
+    // Pick potential next question FIRST to evaluate if we should ask it or stop
+    const nextQ = selectNextQuestion(availableQuestions, lead, runUp);
+    const nextAvail = nextQ ? availableQuestions.filter((q) => q.id !== nextQ.id) : [];
+    const hasRemainingHighSig = nextAvail.some((q) => q.signal >= HIGH_SIGNAL);
+    const isNextQHighSig = nextQ ? nextQ.signal >= HIGH_SIGNAL : false;
 
     // Decide if we should finish
-    const nextAvail = availableQuestions;
     const isFinished = (selectedMode: "adaptive" | "exhaustive") => {
-      if (nextAvail.length === 0) return true;
+      if (!nextQ) return true;
       if (selectedMode === "exhaustive") return false;
       return (
         updatedAsked.length >= MIN_QUESTIONS &&
-        !hasHighSig &&
-        gap >= CONFIDENCE_THRESHOLD
+        gap >= CONFIDENCE_THRESHOLD &&
+        !isNextQHighSig &&
+        !hasRemainingHighSig
       );
     };
 
@@ -301,10 +368,9 @@ export default function App() {
       setCurrentStep("results");
       setResultsTab("report");
     } else {
-      const nextQ = selectNextQuestion(nextAvail, lead, runUp);
       if (nextQ) {
         setCurrentQuestion(nextQ);
-        setAvailableQuestions(nextAvail.filter((q) => q.id !== nextQ.id));
+        setAvailableQuestions(nextAvail);
       } else {
         setCurrentStep("results");
         setResultsTab("report");
@@ -611,7 +677,7 @@ export default function App() {
                       width: `${
                         mode === "exhaustive"
                           ? (askedQuestions.length / QUESTIONS.length) * 100
-                          : Math.min(100, (askedQuestions.length / 12) * 100)
+                          : (askedQuestions.length / Math.max(12, askedQuestions.length + 1)) * 100
                       }%`
                     }}
                   />

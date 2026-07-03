@@ -19,7 +19,11 @@ import {
   Printer,
   RefreshCw,
   Sparkles,
-  Info
+  Info,
+  UserX,
+  ShieldAlert,
+  Zap,
+  Network
 } from "lucide-react";
 
 interface ResultsDisplayProps {
@@ -78,8 +82,139 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     .sort((a, b) => b.influence - a.influence)
     .slice(0, 4);
 
+  // Derive behavioral / people / process flags
+  const behavioralFlags: { title: string; desc: string; impact: string; icon: React.ReactNode }[] = [];
+
+  const poAns = answers["po_availability"]?.text;
+  if (poAns && poAns.includes("Rarely")) {
+    behavioralFlags.push({
+      title: "Decision-Maker Bottleneck",
+      desc: "A decision-maker or customer is rarely available for continuous input and feedback.",
+      impact: "Frameworks like Scrum or XP will stall. Without a daily engaged Product Owner, teams guess requirements, resulting in high rework and feature drift.",
+      icon: <UserX className="w-4 h-4 text-amber-700" />
+    });
+  }
+
+  const mgrAns = answers["mgr_control"]?.text;
+  const cultAns = answers["culture"]?.text;
+  if (
+    (mgrAns && mgrAns.includes("top-down")) ||
+    (cultAns && cultAns.includes("Command-and-control"))
+  ) {
+    behavioralFlags.push({
+      title: "Self-Organization Mismatch",
+      desc: "Command-and-control culture or management style values top-down task assignment over team autonomy.",
+      impact: "Scrum or XP relies on decentralized authority. Imposing sprints in a command-and-control environment leads to empty ceremonies ('cargo-cult' agile) rather than actual agility.",
+      icon: <ShieldAlert className="w-4 h-4 text-amber-700" />
+    });
+  }
+
+  const matAns = answers["team_maturity"]?.text;
+  if (
+    matAns && matAns.includes("New") &&
+    (recommendedId === "scrum" || recommendedId === "xp" || recommendedId === "kanban")
+  ) {
+    behavioralFlags.push({
+      title: "Agile Maturity vs. Autonomy Gap",
+      desc: "The delivery team is new to agile and prefers clear, pre-defined upfront structure, but the recommended framework requires high self-organization.",
+      impact: "Pushing full autonomy without established habits can lead to confusion and stagnation. Pair the model with strong mentoring or use a Hybrid approach first.",
+      icon: <Users className="w-4 h-4 text-amber-700" />
+    });
+  }
+
+  const intAns = answers["interrupt_rate"]?.text;
+  if (intAns && intAns.includes("Frequently") && recommendedId === "scrum") {
+    behavioralFlags.push({
+      title: "High Interruption vs. Protected Sprint Conflict",
+      desc: "The team is frequently interrupted by urgent, unplanned work, but Scrum mandates protected sprint commitments.",
+      impact: "Commitments will be broken repeatedly, destroying morale. You should protect the team, or pivot to a continuous pull-based framework like Kanban.",
+      icon: <Zap className="w-4 h-4 text-amber-700" />
+    });
+  }
+
+  // TWO-PLANE BLUEPRINT DERIVATION
+  const teamMethods: MethodologyId[] = ["scrum", "kanban", "xp", "scrumban", "lean"];
+  const sortedTeam = teamMethods
+    .map((id) => ({ id, score: scores[id] ?? 0 }))
+    .sort((a, b) => b.score - a.score);
+  const teamId = sortedTeam[0]?.id || "scrum";
+
+  const governanceMethods: MethodologyId[] = ["waterfall", "hybrid", "safe"];
+  const sortedGov = governanceMethods
+    .map((id) => ({ id, score: scores[id] ?? 0 }))
+    .sort((a, b) => b.score - a.score);
+  const govId = sortedGov[0]?.id || "hybrid";
+
+  let combineText = "";
+  const isSmallTeam = answers["team_scale"]?.text.includes("small team") || answers["team_scale"]?.text.includes("≤10");
+  const overallWinner = recommendedId;
+
+  if (isSmallTeam && ["scrum", "kanban", "xp", "scrumban", "lean"].includes(overallWinner)) {
+    combineText = `A single, lightweight team-level method (${RECS[overallWinner].name}) is sufficient for your scope. You do not need a scaling or heavy enterprise governance model.`;
+  } else {
+    if (govId === "safe") {
+      if (teamId === "scrum") {
+        combineText = "Run SAFe (Scaled Agile) at the program/portfolio level with highly aligned Scrum teams executing beneath.";
+      } else if (teamId === "kanban" || teamId === "scrumban") {
+        combineText = "Run SAFe at the program/portfolio level with Kanban/Scrumban boards managing continuous service delivery.";
+      } else {
+        combineText = `Run SAFe at the program/portfolio level with ${RECS[teamId].name} teams executing underneath.`;
+      }
+    } else if (govId === "hybrid") {
+      if (teamId === "scrum") {
+        combineText = "Use a stage-gate/Hybrid backbone for compliance and milestone governance, with Scrum sprints powering execution within each stage.";
+      } else if (teamId === "kanban") {
+        combineText = "Use a stage-gate/Hybrid backbone for milestones, with continuous Kanban flow managing task completion inside each stage.";
+      } else {
+        combineText = `Use a stage-gate/Hybrid backbone for governance, with ${RECS[teamId].name} managing execution within each phase.`;
+      }
+    } else if (govId === "waterfall") {
+      combineText = `Run a structured Waterfall stage-gate process, using lightweight ${RECS[teamId].name} techniques for team execution under strict milestones.`;
+    }
+  }
+
   return (
     <div id="results-report-view" className="space-y-6 print:space-y-4">
+      {/* BEHAVIORAL WARNING ALERTS (THE ALARM-CLOCK CRITIQUE PASS) */}
+      {behavioralFlags.length > 0 && (
+        <div id="behavioral-warning-card" className="bg-gradient-to-r from-amber-50 to-amber-100/60 border border-amber-200/80 rounded-2xl p-5 shadow-sm space-y-4 print:bg-slate-50 print:border-slate-300">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-600 text-white rounded-xl shadow-sm shrink-0">
+              <AlertTriangle className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-amber-900 tracking-tight uppercase">
+                ⚠️ Systemic People & Process Risks Detected
+              </h2>
+              <p className="text-xs text-amber-800 leading-relaxed mt-1">
+                Your answers reveal structural behaviors that <strong>no delivery framework can resolve on its own</strong>. 
+                Address these organizational bottlenecks first—otherwise, any methodology you select below is destined to become a mirror of existing dysfunction.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            {behavioralFlags.map((flag, idx) => {
+              return (
+                <div key={idx} className="bg-white/90 backdrop-blur-sm border border-amber-200/50 p-4 rounded-xl space-y-2 hover:bg-white hover:border-amber-300 transition-all print:bg-white print:border-slate-200">
+                  <div className="flex items-center gap-2 border-b border-amber-100 pb-1.5 print:border-slate-100">
+                    {flag.icon}
+                    <span className="text-xs font-black text-amber-900 uppercase tracking-wide">
+                      {flag.title}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-700 leading-relaxed">
+                    <strong>Reality Check:</strong> {flag.desc}
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed bg-amber-50/50 border border-amber-100/60 p-2.5 rounded-lg print:bg-slate-50 print:border-slate-200">
+                    <strong>Framework Impact:</strong> {flag.impact}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {/* Header Summary Card */}
       <div className="bg-gradient-to-br from-indigo-900 to-indigo-950 text-white rounded-2xl p-6 shadow-md border border-indigo-950/40 relative overflow-hidden print:bg-white print:text-slate-800 print:border-slate-200 print:shadow-none">
         {/* Abstract background graphics */}
@@ -120,6 +255,62 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
             <span className="block text-[10px] text-indigo-300/80 mt-0.5 font-medium print:text-slate-500">
               Analyzed across {askedQuestions.length} answered questions covering {new Set(askedQuestions.map(q => q.perspective)).size} distinct organizational viewpoints.
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Two-Plane Methodology Blueprint */}
+      <div id="two-plane-blueprint-card" className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4 print:border-slate-300">
+        <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+          <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg">
+            <Network className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
+              Two-Plane Methodology Blueprint
+            </h3>
+            <p className="text-[11px] text-slate-500 font-medium">
+              Separating governance structure from team execution prevents methodology dogmatism.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Plane 1: Delivery & Governance Model */}
+          <div className="border border-slate-100 bg-slate-50/50 p-4 rounded-xl space-y-2">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+              Level 1: Governance & Delivery Model
+            </span>
+            <h4 className="text-lg font-black text-slate-800">
+              {RECS[govId]?.name || "Hybrid"}
+            </h4>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Provides the macro structure for budgeting, contract alignment, client reporting, and strategic milestones.
+            </p>
+          </div>
+
+          {/* Plane 2: Team Execution Level */}
+          <div className="border border-slate-100 bg-slate-50/50 p-4 rounded-xl space-y-2">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+              Level 2: Team-Level Execution Method
+            </span>
+            <h4 className="text-lg font-black text-slate-800">
+              {RECS[teamId]?.name || "Scrum"}
+            </h4>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Powers the daily rhythm, task management, collaboration ceremonies, and delivery feedback loops.
+            </p>
+          </div>
+        </div>
+
+        {/* Combine Banner */}
+        <div className="bg-indigo-50/70 border border-indigo-100/80 rounded-xl p-4 flex items-start gap-3">
+          <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <span className="text-[10px] font-black uppercase text-indigo-800 tracking-wide">Strategic Synthesis</span>
+            <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+              {combineText}
+            </p>
           </div>
         </div>
       </div>

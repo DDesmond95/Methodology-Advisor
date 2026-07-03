@@ -380,12 +380,13 @@ export const QUESTIONS: Question[] = [
   {
     id: "culture",
     perspective: "HR / Org Culture",
-    signal: 1,
-    text: "How would you describe the organizational culture?",
+    signal: 2,
+    text: "How would you describe the organizational culture? (Competing Values Framework)",
     options: [
-      { text: "Command-and-control, hierarchical", weights: { waterfall: 3, hybrid: 2 } },
-      { text: "Mixed", weights: { hybrid: 2, scrumban: 1 } },
-      { text: "Collaborative, trust-based", weights: { scrum: 3, kanban: 2, xp: 1 } }
+      { text: "Collaborative, people-first, mentoring (Clan)", weights: { scrum: 4, xp: 3, scrumban: 2 } },
+      { text: "Innovative, risk-taking, entrepreneurial (Adhocracy)", weights: { lean: 4, xp: 3, kanban: 3 } },
+      { text: "Results/deadline-driven, competitive (Market)", weights: { scrum: 2, hybrid: 3, safe: 2 } },
+      { text: "Structured, controlled, procedure-driven (Hierarchy)", weights: { waterfall: 4, hybrid: 3, safe: 3, xp: -2, kanban: -1 } }
     ]
   },
   {
